@@ -130,9 +130,9 @@ class Poloniex(Exchange):
     def public_query(self, url: str, retries: int = 2):
         req = urllib.request.Request(url)
         try:
-            response = urllib.request.urlopen(req).read()
+            with urllib.request.urlopen(req) as response
+            data = response.read()
         except (URLError, HTTPError, ContentTooShortError) as err:
-            response = None
             if retries > 0:
                 if hasattr(err, 'code') and 500 <= err.code < 600:
                     return self.public.query(url, retries - 1)
@@ -140,17 +140,17 @@ class Poloniex(Exchange):
                     return None
             else:
                 return None
-        return json.loads(response)
+        return json.loads(data)
 
     def signed_query(self, url: str, req={}, retries: int = 2):
         data = urllib.parse.urlencode(req)
         sign = hmac.new(self.secret_key, data, hashlib.sha512).hexdigest()
         headers = dict(Sign=sign, Key=self.api_key)
-        request = urllib.request.Request(self.tradingapi, data, headers)
+        req = urllib.request.Request(self.tradingapi, data, headers)
         try:
-            response = urllib.request.urlopen(request).read()
+            with urllib.request.urlopen(req) as response
+            data = response.read()
         except (URLError, HTTPError, ContentToShortError) as err:
-            response = None
             if retries > 0:
                 if hasattr(err, 'code') and 500 <= err.code < 600:
                     return self.signed.query(url, req, retries - 1)
@@ -158,7 +158,7 @@ class Poloniex(Exchange):
                     return None
             else:
                 return None
-        resp = json.loads(response.read())
+        resp = json.loads(data)
         return self.post_processing(resp)
 
     def trade_history(self, currency_pair: str):
