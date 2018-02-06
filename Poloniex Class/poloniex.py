@@ -1,4 +1,4 @@
-#! python3
+#!python3
 
 import abc
 import decimal
@@ -11,7 +11,27 @@ from urllib.parse import urlencode
 import urllib.request
 
 
-class Exchange(metaclass=abc.ABCMeta):
+class Exchange(metaclass=abc.ABCMeta)
+
+    @abc.abstractmethod
+    def initialize(self):
+        raise NotImplemented()
+
+    @abc.abstractmethod
+    def rate_limit(self, ):
+        raise NotImplemented()
+
+    @abc.abstractmethod
+    def update_keys(self, api, secret, auto_init):
+        raise NotImplemented()
+
+    @abc.abstractmethod
+    def chart_data(self):
+        raise NotImplemented()
+
+    @abc.abstractmethod
+    def ticker_data(self):
+        raise NotImplemented()
 
     @abc.abstractmethod
     def balances(self):
@@ -26,10 +46,6 @@ class Exchange(metaclass=abc.ABCMeta):
         raise NotImplemented()
 
     @abc.abstractmethod
-    def initialize(self):
-        raise NotImplemented()
-
-    @abc.abstractmethod
     def open_orders(self, currency_pair):
         raise NotImplemented()
 
@@ -41,9 +57,7 @@ class Exchange(metaclass=abc.ABCMeta):
     def trade_history(self, currency_pair):
         raise NotImplemented()
 
-    @abc.abstractmethod
-    def update_keys(self, api, secret, auto_init):
-        raise NotImplemented()
+
 
 
 class Poloniex(Exchange):
@@ -54,21 +68,23 @@ class Poloniex(Exchange):
 
         Args:
             api (str): API Access Key from Poloniex for authorization
-            secret (str): Secret Key from Poloniex for authentication
+            secret_key (str): Secret Key from Poloniex for authentication
             auto_init (bool): Launches the initialize() method upon instance creation if True
 
         Attributes:
             api (str): Instance level storage for the API Access Key
-            secret (str): Instance level storage for the Secret Key
+            secret_key (str): Instance level storage for the Secret Key
             connection (bool): Instance level indicator of successful connection
 
     """
+# Internal Class Methods
 
     def __init__(self, api: str, secret_key: str, auto_init=False):
         self.api_key = api
         self.secret_key = secret_key
-        self.publicapi = 'https://poloniex.com/public?command='
-        self.tradingapi = 'https://poloniex.com/tradingapi'
+        self.public_api = 'https://poloniex.com/public?command='
+        self.trading_api = 'https://poloniex.com/tradingapi'
+        self.rate_timer = []
         if auto_init:
             self.connection = self.initialize()
         else:
@@ -84,104 +100,112 @@ class Poloniex(Exchange):
     def __bool__(self):
         return self.connection
 
-    def balances(self):
-        request = dict(command='returnBalances',
-                       nonce=int(time.time() * 1000), )
-        return self.signed_query(self.tradingapi, request)
+    def post_processing(self, data) -> dict:
+        pass
 
-    def buy(self, currency_pair: str, rate: Decimal.decimal, amount: Decimal.decimal) -> dict:
-        request = dict(command='buy',
-                       nonce=int(time.time() * 1000),
-                       currencyPair=currency_pair,
-                       rate=rate,
-                       amount=amount)
-        return self.signed_query(self.tradingapi, request)
+    def rate_limit(self) ->bool:
+        self.rate_timer.append(time.time())
+        if len(self.rate_timer) > 4:
+            diff = self.rate_timer[4] - self.rate_timer[0]
+            if diff <= 1:
+                time.sleep(1-diff)
+            self.rate_timer.pop(0)
+        return True
 
-    def sell(self, currency_pair: str, rate: Decimal.decimal, amount: Decimal.decimal) -> dict:
-        request = dict(command='sell',
-                       nonce=int(time.time() * 1000),
-                       currencyPair=currency_pair,
-                       rate=rate,
-                       amount=amount)
-        return self.signed_query(self.tradingapi, request)
+    def public_query(self, req: str, retries: int = 2) -> dict:
+        url = self.public_api+req
+        request = urllib.request.Request(url)
+        try:
+            with urllib.request.urlopen(request) as response:
+                data = response.read()
+        except (URLError, HTTPError, ContentTooShortError) as err:
+            if retries > 0:
+                if hasattr(err, 'code') and 500 <= err.code < 600:
+                    return self.public_query(req, retries - 1)
+                else:
+                    return dict([])
+            else:
+                return dict([])
+        return json.loads(data)
 
-    def cancel_order(self, currency_pair: str, order_number: str):
-        request = dict(command='cancelOrder',
-                       nonce=int(time.time() * 1000),
-                       currencyPair=currency_pair,
-                       orderNumber=order_number)
-        return self.signed_query(self.tradingapi, request)
+    def signed_query(self, req: dict, retries: int = 2) -> dict:
+        req['nonce'] = int(time.time()*1000)
+        data = urlencode(req)
+        sign = hmac.new(self.secret_key, data, sha512).hexdigest()
+        headers = dict(Sign=sign, Key=self.api_key)
+        url_req = urllib.request.Request(self.trading_api, data, headers)
+        try:
+            with urllib.request.urlopen(url_req) as response:
+                data = response.read()
+        except (URLError, HTTPError, ContentTooShortError) as err:
+            if retries > 0:
+                if hasattr(err, 'code') and 500 <= err.code < 600:
+                    return self.signed_query(req, retries - 1)
+                else:
+                    return dict([])
+            else:
+                return dict([])
+
+        return json.loads(data)
 
     def initialize(self) -> bool:
-        if self.balance():
+        if self.balances():
             return True
         else:
             return False
 
-    def open_orders(self, currency_pair: str):
-        request = dict(command='returnOpenOrders',
-                       nonce=int(time.time() * 1000),
-                       currencyPair=currency_pair)
-        return self.signed_query(self.tradingapi, request)
-
-    def post_processing(self, data):
-        pass
-
-    def public_query(self, url: str, retries: int = 2):
-        req = urllib.request.Request(url)
-        try:
-            with urllib.request.urlopen(req) as response
-            data = response.read()
-        except (URLError, HTTPError, ContentTooShortError) as err:
-            if retries > 0:
-                if hasattr(err, 'code') and 500 <= err.code < 600:
-                    return self.public.query(url, retries - 1)
-                else:
-                    return None
-            else:
-                return None
-        return json.loads(data)
-
-    def signed_query(self, url: str, req={}, retries: int = 2):
-        data = urllib.parse.urlencode(req)
-        sign = hmac.new(self.secret_key, data, hashlib.sha512).hexdigest()
-        headers = dict(Sign=sign, Key=self.api_key)
-        req = urllib.request.Request(self.tradingapi, data, headers)
-        try:
-            with urllib.request.urlopen(req) as response
-            data = response.read()
-        except (URLError, HTTPError, ContentToShortError) as err:
-            if retries > 0:
-                if hasattr(err, 'code') and 500 <= err.code < 600:
-                    return self.signed.query(url, req, retries - 1)
-                else:
-                    return None
-            else:
-                return None
-        resp = json.loads(data)
-        return self.post_processing(resp)
-
-    def trade_history(self, currency_pair: str):
-        request = dict(command='returnTradeHistory',
-                       nonce=int(time.time() * 1000),
-                       currencyPair=currency_pair)
-        return self.signed_query(self.tradingapi, request)
-
-    def update_keys(self, api: str, secret_key: str, auto_init=False):
+    def update_keys(self, api: str, secret_key: str, auto_init: bool=False) -> bool:
         self.api_key = api
         self.secret_key = secret_key
         if auto_init:
             self.connection = self.initialize()
         else:
             self.connection = False
+        return self.connection
 
-    def withdraw(self, currency: str, address: str) -> dict:
+    # Public API Methods
+
+    # Trading Api Methods
+
+    def balances(self) -> dict:
+        request = dict(command='returnBalances')
+        return self.signed_query(request)
+
+    def buy(self, currency_pair: str, rate: decimal.Decimal, amount: decimal.Decimal) -> dict:
+        request = dict(command='buy',
+                       currencyPair=currency_pair,
+                       rate=rate,
+                       amount=amount)
+        return self.signed_query(request)
+
+    def sell(self, currency_pair: str, rate: decimal.Decimal, amount: decimal.Decimal) -> dict:
+        request = dict(command='sell',
+                       currencyPair=currency_pair,
+                       rate=rate,
+                       amount=amount)
+        return self.signed_query(request)
+
+    def cancel_order(self, order_number: str) -> dict:
+        request = dict(command='cancelOrder',
+                       orderNumber=order_number)
+        return self.signed_query(request)
+
+    def open_orders(self, currency_pair: str) -> dict:
+        request = dict(command='returnOpenOrders',
+                       currencyPair=currency_pair)
+        return self.signed_query(request)
+
+    def trade_history(self, currency_pair: str) -> dict:
+        request = dict(command='returnTradeHistory',
+                       currencyPair=currency_pair)
+        return self.signed_query(request)
+
+    def withdraw(self, currency: str, address: str, amount: decimal.Decimal) -> dict:
         request = dict(command='withdraw',
-                       nonce=int(time.time() * 1000),
                        currency=currency,
                        amount=amount,
                        address=address)
-        return self.signed_query(self.tradingapi, request)
+        return self.signed_query(request)
 
 
 class Account:
@@ -190,12 +214,12 @@ class Account:
         if exchange == "Poloniex" or "poloniex:":
             self.exchange = Poloniex(api, secret, auto_init)
         if self.exchange:
-            self.balances = self.exchange.balance()
+            self.balances = self.exchange.balances()
             self.trade_history = self.exchange.trade_history
-            self.orders = self.exchange.openorders()
+            self.orders = self.exchange.open_orders()
 
 
 class CurrencyPair:
-    def __init__(self, base, target, **kwargs):
+    def __init__(self, base, target):
         self.base_ticker = base
         self.target_ticker = target
