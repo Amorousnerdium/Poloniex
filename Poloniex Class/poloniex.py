@@ -79,6 +79,8 @@ class Poloniex(Exchange):
     """
     rate_timer = []
 
+    __slots__ = ["api_key", "secret_key", "public_api", "trading_api", "connection"]
+
 # Internal Class Methods
 
     def __init__(self, api_key: str, secret_key: str, auto_init=False):
@@ -124,12 +126,12 @@ class Poloniex(Exchange):
         Returns:
             bool
         """
-        self.rate_timer.append(time.time())
-        if len(self.rate_timer) > 4:
-            diff = self.rate_timer[4] - self.rate_timer[0]
+        Poloniex.rate_timer.append(time.time())
+        if len(Poloniex.rate_timer) > 4:
+            diff = Poloniex.rate_timer[4] - Poloniex.rate_timer[0]
             if diff <= 1:
                 time.sleep(1-diff)
-            self.rate_timer.pop(0)
+            Poloniex.rate_timer.pop(0)
         return True
 
     def public_query(self, req: str, retries: int = 2) -> dict:
@@ -212,44 +214,72 @@ class Poloniex(Exchange):
             self.connection = False
         return self.connection
 
+    # Class Properties - Public API
+
+    @property
+    def ticker_data(self) -> dict:
+        """
+        Returns the ticker for all markets.
+
+        Returns:
+            dict: Sample output:
+                    {"BTC_LTC":
+                        {   "last":"0.0251",
+                            "lowestAsk":"0.02589999",
+                            "highestBid":"0.0251",
+                            "percentChange":"0.02390438",
+                            "baseVolume":"6.16485315",
+                            "quoteVolume":"245.82513926"
+                        }
+                    ,"BTC_NXT":
+                        {   "last":"0.00005730",
+                            "lowestAsk":"0.00005710",
+                            "highestBid":"0.00004903",
+                            "percentChange":"0.16701570",
+                            "baseVolume":"0.45347489",
+                            "quoteVolume":"9094"
+                        },
+                    ... }
+        """
+        request = self.public_api+'returnTicker'
+        return self.public_query(request)
+
+    # Class Properties - Trading API
+
+    @property
+    def balances(self) -> dict:
+        request = dict(command='returnBalances')
+        return self.signed_query(request)
+
     # Public API Methods
 
-    def chart_data(self):
+    def chart_data(self, currency_pair: str, period: int, start: str, end: str) -> dict:
         """
         Returns candlestick chart data. Required GET parameters are "currencyPair", "period" (candlestick period in
         seconds; valid values are 300, 900, 1800, 7200, 14400, and 86400), "start", and "end". "Start" and "end" are
         given in UNIX timestamp format and used to specify the date range for the data returned.
 
-        Sample output:
-            [
-                {   "date":1405699200,
-                    "high":0.0045388,
-                    "low":0.00403001,
-                    "open":0.00404545,
-                    "close":0.00427592,
-                    "volume":44.11655644,
-                    "quoteVolume":10259.29079097,
-                    "weightedAverage":0.00430015},
-            ...]
-
         Returns:
-            dict
+            dict: Sample output:
+                    [
+                        {   "date":1405699200,
+                            "high":0.0045388,
+                            "low":0.00403001,
+                            "open":0.00404545,
+                            "close":0.00427592,
+                            "volume":44.11655644,
+                            "quoteVolume":10259.29079097,
+                            "weightedAverage":0.00430015},
+                    ...]
         """
-        pass
-
-    def ticker_data(self):
-        """
-
-        Returns:
-            dict
-        """
-        pass
+        request = self.public_api+'returnChartData&currencyPair='
+        request.join(currency_pair)
+        request.join('&start='+start)
+        request.join('&end='+end)
+        request.join('&period='+period)
+        return self.public_query(request)
 
     # Trading Api Methods
-
-    def balances(self) -> dict:
-        request = dict(command='returnBalances')
-        return self.signed_query(request)
 
     def buy(self, currency_pair: str, rate: Decimal, amount: Decimal) -> dict:
         request = dict(command='buy',
