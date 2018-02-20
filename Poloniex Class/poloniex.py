@@ -58,8 +58,6 @@ class Exchange(metaclass=abc.ABCMeta):
         raise NotImplemented()
 
 
-
-
 class Poloniex(Exchange):
     """
         Hi! I am the Poloniex.com Cryptocurrency Exchange Class for Python >3.5! My life long goal and penultimate
@@ -111,7 +109,7 @@ class Poloniex(Exchange):
         Returns:
             bool
         """
-        if self.balances():
+        if self.balances:
             self.connection = True
             return True
         else:
@@ -276,7 +274,7 @@ class Poloniex(Exchange):
         request.join(currency_pair)
         request.join('&start='+start)
         request.join('&end='+end)
-        request.join('&period='+period)
+        request.join('&period='+str(period))
         return self.public_query(request)
 
     # Trading Api Methods
@@ -324,7 +322,7 @@ class Account:
         if exchange == "Poloniex" or "poloniex:":
             self.exchange = Poloniex(api, secret, auto_init)
         if self.exchange:
-            self.balances = self.exchange.balances()
+            self.balances = self.exchange.balances
             self.trade_history = self.exchange.trade_history
             self.orders = self.exchange.open_orders(currency_pair='all')
 
