@@ -1,6 +1,5 @@
 #!python3
 
-import abc
 import hmac
 import json
 import time
@@ -10,55 +9,10 @@ from hashlib import sha512
 from urllib.error import URLError, HTTPError, ContentTooShortError
 from urllib.parse import urlencode
 
-
-class Exchange(metaclass=abc.ABCMeta):
-
-    @abc.abstractmethod
-    def initialize(self):
-        raise NotImplemented()
-
-    @abc.abstractmethod
-    def rate_limit(self, ):
-        raise NotImplemented()
-
-    @abc.abstractmethod
-    def update_keys(self, api, secret, auto_init):
-        raise NotImplemented()
-
-    @abc.abstractmethod
-    def chart_data(self):
-        raise NotImplemented()
-
-    @abc.abstractmethod
-    def ticker_data(self):
-        raise NotImplemented()
-
-    @abc.abstractmethod
-    def balances(self):
-        raise NotImplemented()
-
-    @abc.abstractmethod
-    def buy(self, currency_pair, rate, amount):
-        raise NotImplemented()
-
-    @abc.abstractmethod
-    def cancel_order(self, order_number):
-        raise NotImplemented()
-
-    @abc.abstractmethod
-    def open_orders(self, currency_pair):
-        raise NotImplemented()
-
-    @abc.abstractmethod
-    def sell(self, currency_pair, rate, amount):
-        raise NotImplemented()
-
-    @abc.abstractmethod
-    def trade_history(self, currency_pair):
-        raise NotImplemented()
+from numpy import exp, linspace, convolve
 
 
-class Poloniex(Exchange):
+class Poloniex:
     """
         Hi! I am the Poloniex.com Cryptocurrency Exchange Class for Python >3.5! My life long goal and penultimate
         aspiration is to encapsulate all published interactions for Poloniex's trading API! Hopefully I will live long
@@ -239,8 +193,7 @@ class Poloniex(Exchange):
                         },
                     ... }
         """
-        request = self.public_api+'returnTicker'
-        return self.public_query(request)
+        return self.public_query('returnTicker')
 
     # Class Properties - Trading API
 
@@ -270,8 +223,7 @@ class Poloniex(Exchange):
                             "weightedAverage":0.00430015},
                     ...]
         """
-        request = self.public_api+'returnChartData&currencyPair='
-        request.join(currency_pair)
+        request = 'returnChartData&currencyPair='+currency_pair
         request.join('&start='+start)
         request.join('&end='+end)
         request.join('&period='+str(period))
@@ -326,12 +278,32 @@ class Account:
             self.trade_history = self.exchange.trade_history
             self.orders = self.exchange.open_orders(currency_pair='all')
 
+    def ema_calc(self, closings, period: int):
+        weights = exp(linspace(-1., 0., period))
+        weights /= weights.sum()
+        y = convolve(closings, weights, mode='full')[:len(closings)]
+        y[:period] = y[period]
+        return y
 
-class CurrencyPair:
-    def __init__(self, base, target):
-        self.base_ticker = base
-        self.target_ticker = target
-        self.base_name
-        self.target_name
-        self.string
-        self.price
+    def ema(self, currency_pair: str, length: int, period: int, start: int = None):
+        if start is None:
+            end = int(time.time())
+            start = int(end-length*3600)
+        else:
+            end = int(start+length*3600)
+        data = self.exchange.chart_data(currency_pair, period, str(start), str(end))
+        closings = list()
+        for x in data:
+            for key, value in x.items():
+                closings.append(x['close'])
+        return self.ema_calc(closings, period)
+
+#For Future Use...
+    # class CurrencyPair:
+    # def __init__(self, base, target):
+    #   self.base_ticker = base
+    #    self.target_ticker = target
+    #    self.base_name
+    #    self.target_name
+    #    self.string
+    #    self.price
