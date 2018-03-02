@@ -209,11 +209,46 @@ class Poloniex:
         return self.public_query('returnTicker')
 
     # Class Properties - Trading API
+    @property
+    def active_loans(self) -> dict:
+        request = dict(command='returnActiveLoans')
+        return self.signed_query(request)
 
     @property
     def balances(self) -> dict:
         request = dict(command='returnBalances')
         return self.signed_query(request)
+
+    @property
+    def complete_balances(self) -> dict:
+        request = dict(command='returnCompleteBalances')
+        return self.signed_query(request)
+
+    @property
+    def deposit_addresses(self) -> dict:
+        request = dict(command='returnDepositAddresses')
+        return self.signed_query(request)
+
+    @property
+    def fee_schedule(self) -> dict:
+        request = dict(command='returnFeeInfo')
+        return self.signed_query(request)
+
+    @property
+    def margin_account_summary(self) -> dict:
+        request = dict(command='returnMarginAccountSummary')
+        return self.signed_query(request)
+
+    @property
+    def open_loan_offers(self) -> dict:
+        request = dict(command='returnOpenLoanOffers')
+        return self.signed_query(request)
+
+    @property
+    def tradable_balances(self) -> dict:
+        request = dict(command='returnTradableBalances')
+        return self.signed_query(request)
+
 
     # Public API Methods
 
