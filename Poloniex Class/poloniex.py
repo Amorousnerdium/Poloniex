@@ -170,31 +170,16 @@ class Poloniex:
         return self.connection
 
     # Class Properties - Public API
-    def ticker_data(self) -> dict:
+    @property
+    def currencies(self) -> dict:
         """
         Returns the ticker for all markets.
 
         Returns:
             dict: Sample output:
-                    {"BTC_LTC":
-                        {   "last":"0.0251",
-                            "lowestAsk":"0.02589999",
-                            "highestBid":"0.0251",
-                            "percentChange":"0.02390438",
-                            "baseVolume":"6.16485315",
-                            "quoteVolume":"245.82513926"
-                        }
-                    ,"BTC_NXT":
-                        {   "last":"0.00005730",
-                            "lowestAsk":"0.00005710",
-                            "highestBid":"0.00004903",
-                            "percentChange":"0.16701570",
-                            "baseVolume":"0.45347489",
-                            "quoteVolume":"9094"
-                        },
-                    ... }
+
         """
-        return self.public_query('returnTicker')
+        return self.public_query('returnCurrencies')
 
     @property
     def ticker_data(self) -> dict:
@@ -256,6 +241,19 @@ class Poloniex:
         request.join('&end='+end)
         request.join('&period='+str(period))
         return self.public_query(request)
+
+
+    def loan_orders(self, currency: str) -> dict:
+        """
+        Returns the ticker for all markets.
+
+        Returns:
+            dict: Sample output:
+
+        """
+        request = 'returnLoanOrders&currency='+currency
+        return self.public_query(request)
+
 
     def order_book(self, currency_pair: str, depth: int = 10) -> dict:
         """
