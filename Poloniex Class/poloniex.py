@@ -9,6 +9,7 @@ from hashlib import sha512
 from urllib.error import URLError, HTTPError, ContentTooShortError
 from urllib.parse import urlencode
 
+import requests
 from numpy import exp, linspace, convolve
 
 
@@ -37,7 +38,7 @@ class Poloniex:
 
     def __init__(self, api_key: str, secret_key: str, auto_init=False):
         self.api_key = api_key
-        self.secret_key = secret_key
+        self.secret_key = bytes(secret_key, 'latin-1')
         self.public_api = 'https://poloniex.com/public?command='
         self.trading_api = 'https://poloniex.com/tradingapi'
         if auto_init:
@@ -70,7 +71,8 @@ class Poloniex:
             self.connection = False
             return False
 
-    def rate_limit(self) ->bool:
+    @staticmethod
+    def rate_limit() ->bool:
         """
         Rate limiting method to prevent violation of Poloniex's policy for the number of requests per second. While
         Poloniex has set the rate at 6 requests per second, this function limits the number of requests to 5 per second.
@@ -126,14 +128,15 @@ class Poloniex:
             dict
         """
         req['nonce'] = int(time.time()*1000)
-        data = urlencode(req)
-        sign = hmac.new(self.secret_key, data, sha512).hexdigest()
-        headers = dict(Sign=sign, Key=self.api_key)
-        url_req = urllib.request.Request(self.trading_api, data, headers)
+        data = urlencode(req).encode()
+        sign = hmac.new(self.secret_key, data, sha512)
+        signature = sign.hexdigest()
+        headers = dict(Key=self.api_key, Sign=signature)
         self.rate_limit()
         try:
-            with urllib.request.urlopen(url_req) as response:
-                data = response.read()
+
+            ret = requests.post(self.trading_api, data=req, headers=headers)
+            returned = json.loads(ret.text)
         except (URLError, HTTPError, ContentTooShortError) as err:
             if retries > 0:
                 if hasattr(err, 'code') and 500 <= err.code < 600:
@@ -144,7 +147,7 @@ class Poloniex:
             else:
                 return dict([])
 
-        return json.loads(data)
+        return returned
 
     def update_keys(self, api: str, secret_key: str, auto_init: bool=False) -> bool:
         """
@@ -167,6 +170,31 @@ class Poloniex:
         return self.connection
 
     # Class Properties - Public API
+    def ticker_data(self) -> dict:
+        """
+        Returns the ticker for all markets.
+
+        Returns:
+            dict: Sample output:
+                    {"BTC_LTC":
+                        {   "last":"0.0251",
+                            "lowestAsk":"0.02589999",
+                            "highestBid":"0.0251",
+                            "percentChange":"0.02390438",
+                            "baseVolume":"6.16485315",
+                            "quoteVolume":"245.82513926"
+                        }
+                    ,"BTC_NXT":
+                        {   "last":"0.00005730",
+                            "lowestAsk":"0.00005710",
+                            "highestBid":"0.00004903",
+                            "percentChange":"0.16701570",
+                            "baseVolume":"0.45347489",
+                            "quoteVolume":"9094"
+                        },
+                    ... }
+        """
+        return self.public_query('returnTicker')
 
     @property
     def ticker_data(self) -> dict:
@@ -229,6 +257,73 @@ class Poloniex:
         request.join('&period='+str(period))
         return self.public_query(request)
 
+    def order_book(self, currency_pair: str, depth: int = 10) -> dict:
+        """
+        Returns the order book for a given market, as well as a sequence number for use with the Push API and an
+        indicator specifying whether the market is frozen. You may set currencyPair to "all" to get the order books of
+        all markets.
+
+
+        Returns:
+            dict: Sample output:
+                    [
+                        {   "date":1405699200,
+                            "high":0.0045388,
+                            "low":0.00403001,
+                            "open":0.00404545,
+                            "close":0.00427592,
+                            "volume":44.11655644,
+                            "quoteVolume":10259.29079097,
+                            "weightedAverage":0.00430015},
+                    ...]
+        """
+        request = 'returnOrderBook&currencyPair='+currency_pair+str(depth)
+        return self.public_query(request)
+
+    def public_trade_history(self, currency_pair: str, start: int, end: int = time.time()+500) -> dict:
+        """
+       Returns the past 200 trades for a given market, or up to 50,000 trades between a range specified in UNIX
+       timestamps by the "start" and "end" GET parameters.
+
+
+        Returns:
+            dict: Sample output:
+                    [
+                        {   "date":1405699200,
+                            "high":0.0045388,
+                            "low":0.00403001,
+                            "open":0.00404545,
+                            "close":0.00427592,
+                            "volume":44.11655644,
+                            "quoteVolume":10259.29079097,
+                            "weightedAverage":0.00430015},
+                    ...]
+        """
+        request = 'returnChartData&currencyPair='+currency_pair
+        request.join('&start='+str(start))
+        request.join('&end='+str(end))
+        return self.public_query(request)
+
+    def volume_24_hour(self) -> dict:
+        """
+        Returns the 24-hour volume for all markets, plus totals for primary currencies.
+
+        Returns:
+            dict: Sample output:
+                    [
+                        {   "date":1405699200,
+                            "high":0.0045388,
+                            "low":0.00403001,
+                            "open":0.00404545,
+                            "close":0.00427592,
+                            "volume":44.11655644,
+                            "quoteVolume":10259.29079097,
+                            "weightedAverage":0.00430015},
+                    ...]
+        """
+        request = 'return24Volume'
+        return self.public_query(request)
+
     # Trading Api Methods
 
     def buy(self, currency_pair: str, rate: Decimal, amount: Decimal) -> dict:
@@ -278,7 +373,8 @@ class Account:
             self.trade_history = self.exchange.trade_history
             self.orders = self.exchange.open_orders(currency_pair='all')
 
-    def ema_calc(self, closings, period: int):
+    @staticmethod
+    def ema_calc(closings, period: int):
         weights = exp(linspace(-1., 0., period))
         weights /= weights.sum()
         y = convolve(closings, weights, mode='full')[:len(closings)]
@@ -298,7 +394,7 @@ class Account:
                 closings.append(x['close'])
         return self.ema_calc(closings, period)
 
-#For Future Use...
+# For Future Use...
     # class CurrencyPair:
     # def __init__(self, base, target):
     #   self.base_ticker = base
