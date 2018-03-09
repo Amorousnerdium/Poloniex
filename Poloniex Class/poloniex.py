@@ -40,7 +40,7 @@ class Poloniex:
         self.api_key = api_key
         self.secret_key = bytes(secret_key, 'latin-1')
         self.public_api = 'https://poloniex.com/public?command='
-        self.trading_api = 'https://poloniex.com/tradingapi'
+        self.trading_api = 'https://poloniex.com/tradingApi'
         if auto_init:
             self.connection = self.initialize()
         else:
@@ -136,7 +136,7 @@ class Poloniex:
         try:
 
             ret = requests.post(self.trading_api, data=req, headers=headers)
-            returned = json.loads(ret.text)
+            returned = ret.json()
         except (URLError, HTTPError, ContentTooShortError) as err:
             if retries > 0:
                 if hasattr(err, 'code') and 500 <= err.code < 600:
@@ -249,7 +249,6 @@ class Poloniex:
         request = dict(command='returnTradableBalances')
         return self.signed_query(request)
 
-
     # Public API Methods
 
     def chart_data(self, currency_pair: str, period: int, start: str, end: str) -> dict:
@@ -277,7 +276,6 @@ class Poloniex:
         request.join('&period='+str(period))
         return self.public_query(request)
 
-
     def loan_orders(self, currency: str) -> dict:
         """
         Returns the ticker for all markets.
@@ -288,7 +286,6 @@ class Poloniex:
         """
         request = 'returnLoanOrders&currency='+currency
         return self.public_query(request)
-
 
     def order_book(self, currency_pair: str, depth: int = 10) -> dict:
         """
@@ -358,12 +355,22 @@ class Poloniex:
         return self.public_query(request)
 
     # Trading Api Methods
+    def available_balances(self) -> dict:
+        """TO Do: Add optional account specific balances"""
+        request = dict(command='returnAvailableAccountBalances')
+        return self.signed_query(request)
 
     def buy(self, currency_pair: str, rate: Decimal, amount: Decimal) -> dict:
         request = dict(command='buy',
                        currencyPair=currency_pair,
                        rate=rate,
                        amount=amount)
+        return self.signed_query(request)
+
+    def deposits_withdraws(self, start: int, end: int = time.time()+500) -> dict:
+        request = dict(command='returnDepositsWithdrawals',
+                       start=start,
+                       end=end)
         return self.signed_query(request)
 
     def sell(self, currency_pair: str, rate: Decimal, amount: Decimal) -> dict:
@@ -378,14 +385,39 @@ class Poloniex:
                        orderNumber=order_number)
         return self.signed_query(request)
 
+    def move_order(self, order_number: str, rate: Decimal, amount: Decimal) -> dict:
+        request = dict(command='moveOrder',
+                       orderNumber=order_number,
+                       rate=rate,
+                       amount=amount)
+        return self.signed_query(request)
+
     def open_orders(self, currency_pair: str) -> dict:
         request = dict(command='returnOpenOrders',
                        currencyPair=currency_pair)
         return self.signed_query(request)
 
+    def order_trades(self, order_number: str) -> dict:
+        request = dict(command='returnOrderTrades',
+                       orderNumber=order_number)
+        return self.signed_query(request)
+
     def trade_history(self, currency_pair: str) -> dict:
         request = dict(command='returnTradeHistory',
                        currencyPair=currency_pair)
+        return self.signed_query(request)
+
+    def transfer_balances(self, source: str, destination: str, currency: str, amount: Decimal) -> dict:
+        request = dict(command='transferBalance',
+                       fromAccount=source,
+                       toAccount=destination,
+                       currency=currency,
+                       amount=amount)
+        return self.signed_query(request)
+
+    def new_address(self, currency: str) -> dict:
+        request = dict(command='generateNewAddress',
+                       currency=currency)
         return self.signed_query(request)
 
     def withdraw(self, currency: str, address: str, amount: Decimal) -> dict:
