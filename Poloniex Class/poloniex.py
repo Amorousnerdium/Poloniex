@@ -1,9 +1,7 @@
 #!python3
 
 import hmac
-import json
 import time
-import urllib.request
 from decimal import Decimal
 from hashlib import sha512
 from urllib.error import URLError, HTTPError, ContentTooShortError
@@ -100,11 +98,10 @@ class Poloniex:
             dict
         """
         url = self.public_api+req
-        request = urllib.request.Request(url)
         self.rate_limit()
         try:
-            with urllib.request.urlopen(request) as response:
-                data = response.read()
+            ret = requests.get(url)
+            returned = ret.json()
         except (URLError, HTTPError, ContentTooShortError) as err:
             if retries > 0:
                 if hasattr(err, 'code') and 500 <= err.code < 600:
@@ -114,7 +111,7 @@ class Poloniex:
                     return dict([])
             else:
                 return dict([])
-        return json.loads(data)
+        return returned
 
     def signed_query(self, req: dict, retries: int = 2) -> dict:
         """
@@ -134,7 +131,6 @@ class Poloniex:
         headers = dict(Key=self.api_key, Sign=signature)
         self.rate_limit()
         try:
-
             ret = requests.post(self.trading_api, data=req, headers=headers)
             returned = ret.json()
         except (URLError, HTTPError, ContentTooShortError) as err:
@@ -351,7 +347,7 @@ class Poloniex:
                             "weightedAverage":0.00430015},
                     ...]
         """
-        request = 'return24Volume'
+        request = 'return24hVolume'
         return self.public_query(request)
 
     # Trading Api Methods
@@ -383,6 +379,58 @@ class Poloniex:
     def cancel_order(self, order_number: str) -> dict:
         request = dict(command='cancelOrder',
                        orderNumber=order_number)
+        return self.signed_query(request)
+
+    def loan_cancel_offer(self, order_number: str) -> dict:
+        request = dict(command='cancelLoanOffer',
+                       orderNumber=order_number)
+        return self.signed_query(request)
+
+    def loan_create_offer(self, currency: str, amount: Decimal, duration: int, rate: Decimal, autorenew: int=1) -> dict:
+        request = dict(command='createLoanOffer',
+                       currency=currency,
+                       amount=amount,
+                       duration=duration,
+                       autoRenew=autorenew,
+                       lendingRate=rate)
+        return self.signed_query(request)
+
+    def loan_history(self, start: int, end: int = time.time() + 500) -> dict:
+        """
+
+        """
+        request = dict(command='returnLendingHistory',
+                       start=start,
+                       end=end)
+        return self.signed_query(request)
+
+    def loan_toggle_renew(self, order_number: str) -> dict:
+        request = dict(command='toggleAutoRenew',
+                       orderNumber=order_number)
+        return self.signed_query(request)
+
+    def margin_buy(self, currency_pair: str, rate: Decimal, amount: Decimal) -> dict:
+        request = dict(command='marginBuy',
+                       currencyPair=currency_pair,
+                       rate=rate,
+                       amount=amount)
+        return self.signed_query(request)
+
+    def margin_close_positions(self, currency_pair: str) -> dict:
+        request = dict(command='closeMarginPosition',
+                       currencyPair=currency_pair)
+        return self.signed_query(request)
+
+    def margin_positions(self, currency_pair: str) -> dict:
+        request = dict(command='getMarginPosition',
+                       currencyPair=currency_pair)
+        return self.signed_query(request)
+
+    def margin_sell(self, currency_pair: str, rate: Decimal, amount: Decimal) -> dict:
+        request = dict(command='marginSell',
+                       currencyPair=currency_pair,
+                       rate=rate,
+                       amount=amount)
         return self.signed_query(request)
 
     def move_order(self, order_number: str, rate: Decimal, amount: Decimal) -> dict:
