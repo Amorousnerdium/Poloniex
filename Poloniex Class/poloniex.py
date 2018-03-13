@@ -8,7 +8,7 @@ from urllib.error import URLError, HTTPError, ContentTooShortError
 from urllib.parse import urlencode
 
 import requests
-from numpy import exp, linspace, convolve
+# from numpy import exp, linspace, convolve
 
 
 class Poloniex:
@@ -475,7 +475,8 @@ class Poloniex:
                        address=address)
         return self.signed_query(request)
 
-
+"""
+    For future use...
 class Account:
 
     def __init__(self, api, secret, exchange: str = 'Poloniex', auto_init=False):
@@ -516,3 +517,4 @@ class Account:
     #    self.target_name
     #    self.string
     #    self.price
+"""
